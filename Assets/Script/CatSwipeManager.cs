@@ -8,6 +8,7 @@ using DG.Tweening;
 
 public class CatSwipeManager : MonoBehaviour
 {
+    [Header("Cat Image")]
     public RawImage currentCardImage;
     public RawImage nextCardImage;
     public SwipeCard swipeCard;
@@ -15,6 +16,10 @@ public class CatSwipeManager : MonoBehaviour
     public TMP_Text summaryTMP;
     public Transform likedContainer;
     public GameObject likedImagePrefab;
+    [Header("Loading UI")]
+    public GameObject loadingPanel;
+    public Scrollbar loadingScrollbar;
+    public TMP_Text loadingText;
 
     public int totalCats = 10;
     public int preloadCount = 3;
@@ -22,28 +27,57 @@ public class CatSwipeManager : MonoBehaviour
     private int shownCount = 0;
     private Queue<Texture2D> catQueue = new Queue<Texture2D>();
     private List<Texture2D> likedCats = new List<Texture2D>();
-
     public CatService catService;
 
     void Start()
     {
         endPanel.SetActive(false);
         swipeCard.OnSwipe += OnSwiped;
-        StartCoroutine(PreloadCats());
+        swipeCard.enabled = false;
+        StartCoroutine(PreloadCats(10));
+
     }
 
-    IEnumerator PreloadCats()
+    IEnumerator PreloadCats(int count)
     {
-        for (int i = 0; i < preloadCount; i++)
+        loadingPanel.SetActive(true);
+        swipeCard.enabled = false;
+        DOTween.Kill(loadingScrollbar);
+        loadingScrollbar.size = 0f;
+        catQueue.Clear();
+
+        for (int i = 0; i < count; i++)
         {
-            yield return StartCoroutine(LoadAndEnqueue());
+            yield return StartCoroutine(catService.LoadCat(tex =>
+            {
+                if (tex != null)
+                    catQueue.Enqueue(tex);
+            }));
+
+
+            float progress = (i + 1) / (float)count;
+            DOTween.To(
+                () => loadingScrollbar.size,
+                x => loadingScrollbar.size = x,
+                progress,
+                0.2f
+            ).SetEase(Ease.OutQuad);
+
+            if (loadingText != null)
+                loadingText.text = $"Loading cats... {(int)(progress * 100)}%";
         }
 
         // Assign first two cards
         currentCardImage.texture = catQueue.Dequeue();
         nextCardImage.texture = catQueue.Dequeue();
         shownCount = 1;
+
+        loadingPanel.SetActive(false);
+        loadingText.text = "Loading cats...0%";
+        swipeCard.enabled = true;
     }
+
+
 
     IEnumerator LoadAndEnqueue()
     {
@@ -120,20 +154,21 @@ public class CatSwipeManager : MonoBehaviour
     public void RestartGame()
     {
         endPanel.SetActive(false);
-        swipeCard.enabled = true;
 
         shownCount = 0;
         likedCats.Clear();
         catQueue.Clear();
+
         foreach (Transform child in likedContainer)
-        {
             Destroy(child.gameObject);
-        }
+
         currentCardImage.texture = null;
         nextCardImage.texture = null;
+
         ResetCardTransform();
-        StartCoroutine(PreloadCats());
+        StartCoroutine(PreloadCats(totalCats));
     }
+
 
 
 
